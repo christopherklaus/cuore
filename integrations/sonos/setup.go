@@ -15,12 +15,11 @@ const (
 )
 
 var (
-	auth  *oauth2.Config
 	token *oauth2.Token
 )
 
-func init() {
-	auth = &oauth2.Config{
+func getAuthConfig() *oauth2.Config {
+	return &oauth2.Config{
 		ClientID:     config.Get().SonosClientId,
 		ClientSecret: config.Get().SonosClientSecret,
 		RedirectURL:  redirectURL,

@@ -27,7 +27,7 @@ func (s Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*h
 
 	if token == nil || token.Expiry.Before(time.Now()) {
 		// If the access token is expired or not yet obtained, use the refresh token to get a new one
-		tokenSource := auth.TokenSource(context.Background(), token)
+		tokenSource := getAuthConfig().TokenSource(context.Background(), token)
 
 		newToken, err := tokenSource.Token()
 		if err != nil {
@@ -45,7 +45,8 @@ func (s Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*h
 }
 
 func (s Sonos) GetGroupIdByRoomName(room string) (string, error) {
-	url := fmt.Sprintf("%s/households/%s/groups", baseURL, config.Get().SonosHouseholdId)
+	log.Printf("Getting household id %v", &config.Get().SonosHouseholdId)
+	url := fmt.Sprintf("%s/households/%v/groups", baseURL, &config.Get().SonosHouseholdId)
 	res, _ := s.sonosAPIRequest(url, "GET", nil)
 	defer res.Body.Close()
 

@@ -9,13 +9,13 @@ import (
 
 func (s Sonos) AuthorizationHandlers(sonosRoutes *gin.RouterGroup) {
 	sonosRoutes.GET("/", func(c *gin.Context) {
-		authURL := auth.AuthCodeURL("state", oauth2.AccessTypeOffline) //should be random code
+		authURL := getAuthConfig().AuthCodeURL("state", oauth2.AccessTypeOffline) //should be random code
 		c.Redirect(http.StatusFound, authURL)
 	})
 
 	sonosRoutes.GET("/auth", func(c *gin.Context) {
 		code := c.Query("code")
-		newToken, err := auth.Exchange(c, code)
+		newToken, err := getAuthConfig().Exchange(c, code)
 
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -32,7 +32,7 @@ func (s Sonos) AuthorizationHandlers(sonosRoutes *gin.RouterGroup) {
 		token := &oauth2.Token{
 			RefreshToken: c.Query("refresh_token"),
 		}
-		newToken, err := auth.TokenSource(c, token).Token()
+		newToken, err := getAuthConfig().TokenSource(c, token).Token()
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
