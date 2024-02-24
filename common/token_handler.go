@@ -15,16 +15,8 @@ import (
 )
 
 var (
-	authData  = map[string]oauth2.Token{}
-	key       []byte
-	tokenPath string
+	authData = map[string]oauth2.Token{}
 )
-
-func init() {
-	// TODO: load from env
-	key = []byte(config.Get().EncryptionKey)
-	tokenPath = config.Get().EncryptionFilePath
-}
 
 func GetTokenForProvider(provider string) (*oauth2.Token, error) {
 	if token, ok := authData[provider]; ok {
@@ -64,7 +56,7 @@ func SaveTokenToFile(filename string, oauthToken *oauth2.Token) error {
 	}
 
 	log.Printf("Saving token to file: %s", filename)
-	fullPath := fmt.Sprintf("%s/%s", tokenPath, filename)
+	fullPath := fmt.Sprintf("%s/%s", config.Get().EncryptionFilePath, filename)
 	err = os.WriteFile(fullPath, encryptedToken, 0644)
 	if err != nil {
 		return err
@@ -75,7 +67,7 @@ func SaveTokenToFile(filename string, oauthToken *oauth2.Token) error {
 
 func LoadTokenFromFile(filename string) (*oauth2.Token, error) {
 	log.Printf("Loading token from file: %s", filename)
-	fullPath := fmt.Sprintf("%s/%s", tokenPath, filename)
+	fullPath := fmt.Sprintf("%s/%s", config.Get().EncryptionFilePath, filename)
 	encryptedToken, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, err
@@ -97,7 +89,7 @@ func LoadTokenFromFile(filename string) (*oauth2.Token, error) {
 
 // encrypt encrypts data using AES encryption.
 func encrypt(data []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher([]byte(config.Get().EncryptionKey))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +108,7 @@ func encrypt(data []byte) ([]byte, error) {
 
 // decrypt decrypts data using AES decryption.
 func decrypt(cipherText []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher([]byte(config.Get().EncryptionKey))
 	if err != nil {
 		return nil, err
 	}
