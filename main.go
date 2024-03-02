@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"cuore/config"
-	"cuore/integrations"
+	"cuore/integrations/hue"
 	"cuore/integrations/sonos"
 	"encoding/json"
 	"fmt"
@@ -18,12 +18,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var host string = "localhost"
-var port int = 1883
-
 var Sonos = sonos.Sonos{}
-var Hue = integrations.Hue{}
-var room = "Living Room"
+var Hue = hue.Hue{}
 
 type Page struct {
 	Name         string `json:"name"`
@@ -84,14 +80,15 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 		// needs a more generic interface
 		if messageData.State != Sonos.State.Playing {
 			// TODO: Should come from Button
-			Sonos.PlayPause(room)
+			Sonos.PlayPause(messageData.Room)
 		}
 		if messageData.CurrentValue != Sonos.State.Value {
-			Sonos.VolumeForGroup(messageData.CurrentValue, room)
+			Sonos.VolumeForGroup(messageData.CurrentValue, messageData.Room)
 		}
 
 		Sonos.State.Value = messageData.CurrentValue
 		Sonos.State.Playing = messageData.State
+		Sonos.State.Room = messageData.Room
 		return
 	case "Lights":
 		Hue.Switch(messageData.State)
@@ -103,7 +100,7 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 
 func mqttBroker(wg *sync.WaitGroup, shutdownChan <-chan struct{}) {
 	defer wg.Done()
-	opts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
+	opts := mqtt.NewClientOptions().AddBroker(config.Get().MQTTServer)
 	// TODO: move to Config
 	opts.SetClientID("cuore")
 

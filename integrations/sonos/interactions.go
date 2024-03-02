@@ -26,6 +26,7 @@ func (s Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*h
 	token, _ := getToken()
 
 	if token == nil || token.Expiry.Before(time.Now()) {
+		log.Print("Token expired, refreshing")
 		// If the access token is expired or not yet obtained, use the refresh token to get a new one
 		tokenSource := getAuthConfig().TokenSource(context.Background(), token)
 
@@ -45,9 +46,16 @@ func (s Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*h
 }
 
 func (s Sonos) GetGroupIdByRoomName(room string) (string, error) {
-	log.Printf("Getting household id %v", &config.Get().SonosHouseholdId)
-	url := fmt.Sprintf("%s/households/%v/groups", baseURL, &config.Get().SonosHouseholdId)
-	res, _ := s.sonosAPIRequest(url, "GET", nil)
+	log.Printf("Getting household id %s", config.Get().SonosHouseholdId)
+	url := fmt.Sprintf("%s/households/%s/groups", baseURL, config.Get().SonosHouseholdId)
+	res, err := s.sonosAPIRequest(url, "GET", nil)
+	if err != nil || res.StatusCode != 200 {
+		log.Printf("Failed to make request to Sonos Groups API, %v, %v", res.StatusCode, err)
+		return "", err
+	}
+
+	log.Printf("Successfully retrieved groups for room %s", room)
+
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
@@ -60,6 +68,7 @@ func (s Sonos) GetGroupIdByRoomName(room string) (string, error) {
 	}
 
 	for _, group := range response.Groups {
+		log.Printf("Group %v", group)
 		if group.Name == room {
 			return group.Id, nil
 		}
@@ -75,11 +84,26 @@ func (s Sonos) VolumeForGroup(value int, groupName string) {
 
 	payload := strings.NewReader(fmt.Sprintf("{\"volume\":%d}", value))
 
-	_, err := s.sonosAPIRequest(url, "POST", payload)
+	res, err := s.sonosAPIRequest(url, "POST", payload)
 	if err != nil {
 		log.Printf("Failed to make request to Sonos API, %v", err)
 		return
 	}
+	if res.StatusCode != 200 {
+		log.Printf("Failed to make request to Sonos API, %v", res)
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		log.Printf("Body to String: %s", string(body))
+		return
+	} else {
+		log.Printf("Volume successfully changed to %d for %s", value, groupName)
+	}
+
+	defer res.Body.Close()
 }
 
 func (s Sonos) PlayPause(groupName string) {

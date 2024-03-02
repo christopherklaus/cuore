@@ -70,6 +70,7 @@ func LoadTokenFromFile(filename string) (*oauth2.Token, error) {
 	fullPath := fmt.Sprintf("%s/%s", config.Get().EncryptionFilePath, filename)
 	encryptedToken, err := os.ReadFile(fullPath)
 	if err != nil {
+		log.Fatalf("Error reading token from file: %v", err)
 		return nil, err
 	}
 

@@ -1,4 +1,4 @@
-package integrations
+package hue
 
 import (
 	"cuore/config"
@@ -9,9 +9,13 @@ import (
 )
 
 type Hue struct {
-	Name         string `json:"name"`
-	CurrentValue int    `json:"currentValue"`
-	State        bool   `json:"state"`
+	State State
+}
+
+type State struct {
+	Name    string `json:"name"`
+	Value   int    `json:"value"`
+	Playing bool   `json:"isPlaying"`
 }
 
 var (
@@ -33,6 +37,7 @@ func (h Hue) Setup()        {}
 func (h Hue) Autodiscover() {}
 
 // TODO: All the discovery stuff
+// TODO: Authorisation
 
 func (h Hue) setLightState(state bool, lightId int) {
 	url := fmt.Sprintf("http://192.168.178.34/api/%s/lights/%d/state", authToken, lightId)
