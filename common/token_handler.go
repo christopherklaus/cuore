@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	authData = map[string]oauth2.Token{}
+	authData = map[string]*oauth2.Token{}
 )
 
 func GetTokenForProvider(provider string) (*oauth2.Token, error) {
 	if token, ok := authData[provider]; ok {
-		return &token, nil
+		return token, nil
 	}
 
 	token, err := LoadTokenFromFile(provider)
@@ -32,7 +32,7 @@ func GetTokenForProvider(provider string) (*oauth2.Token, error) {
 }
 
 func SaveTokenForProvider(provider string, token *oauth2.Token) error {
-	authData[provider] = *token
+	authData[provider] = token
 
 	err := SaveTokenToFile(provider, token)
 
