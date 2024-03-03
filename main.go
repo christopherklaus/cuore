@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cuore/common"
 	"cuore/config"
 	"cuore/integrations/hue"
 	"cuore/integrations/sonos"
@@ -18,15 +19,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var Sonos = sonos.Sonos{}
-var Hue = hue.Hue{}
-
-type Page struct {
-	Name         string `json:"name"`
-	CurrentValue int    `json:"currentValue"`
-	State        bool   `json:"state"`
-	Room         string `json:"room"`
-}
+var Sonos *sonos.Sonos = &sonos.Sonos{}
+var Hue *hue.Hue = &hue.Hue{}
 
 func init() {
 	config.LoadEnvs()
@@ -66,7 +60,7 @@ func apiRouter(wg *sync.WaitGroup, shutdownChan <-chan struct{}) {
 }
 
 func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
-	var messageData Page
+	var messageData common.Page
 
 	log.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 
@@ -77,18 +71,7 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 
 	switch messageData.Name {
 	case "Music":
-		// needs a more generic interface
-		if messageData.State != Sonos.State.Playing {
-			// TODO: Should come from Button
-			Sonos.PlayPause(messageData.Room)
-		}
-		if messageData.CurrentValue != Sonos.State.Value {
-			Sonos.VolumeForGroup(messageData.CurrentValue, messageData.Room)
-		}
-
-		Sonos.State.Value = messageData.CurrentValue
-		Sonos.State.Playing = messageData.State
-		Sonos.State.Room = messageData.Room
+		Sonos.UpdateState(messageData)
 		return
 	case "Lights":
 		Hue.Switch(messageData.State)

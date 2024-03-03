@@ -2,6 +2,7 @@ package sonos
 
 import (
 	"context"
+	"cuore/common"
 	"cuore/config"
 	"encoding/json"
 	"fmt"
@@ -9,11 +10,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 var (
-	baseURL = "https://api.ws.sonos.com/control/api/v1"
+	baseURL      = "https://api.ws.sonos.com/control/api/v1"
+	groupForRoom = map[string]string{}
+	roomMutex    sync.Mutex
 )
 
 func authenticationToken() string {
@@ -21,7 +25,52 @@ func authenticationToken() string {
 	return fmt.Sprintf("Bearer %s", token.AccessToken)
 }
 
-func (s Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
+func (s *Sonos) UpdateState(state common.Page) {
+	s.SetRoom(state.Room) // need to wait for room being set
+
+	s.SetValue(state.CurrentValue)
+	s.SetIsPlaying(state.State)
+}
+
+func (s *Sonos) SetIsPlaying(isPlaying bool) {
+	if s.State.Playing == isPlaying {
+		return
+	}
+
+	s.State.Playing = isPlaying
+
+	if isPlaying {
+		s.Play()
+	}
+
+	if !isPlaying {
+		s.Pause()
+	}
+}
+
+func (s *Sonos) SetValue(value int) {
+	log.Print("Room is ", s.State.Room)
+	if s.State.Value == value {
+		return
+	}
+
+	s.VolumeForGroup(value)
+	s.State.Value = value
+}
+
+func (s *Sonos) SetRoom(room string) {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
+
+	s.State.Room = room
+
+	if _, ok := groupForRoom[room]; !ok {
+		groupId, _ := s.GetGroupIdByRoomName(room)
+		groupForRoom[room] = groupId
+	}
+}
+
+func (s *Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
 	req, _ := http.NewRequest(method, url, payload)
 	token, _ := getToken()
 
@@ -45,9 +94,13 @@ func (s Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*h
 	return http.DefaultClient.Do(req)
 }
 
-func (s Sonos) GetGroupIdByRoomName(room string) (string, error) {
+func (s *Sonos) GetGroupIdByRoomName(room string) (string, error) {
 	log.Printf("Getting household id %s", config.Get().SonosHouseholdId)
-	url := fmt.Sprintf("%s/households/%s/groups", baseURL, config.Get().SonosHouseholdId)
+	url := fmt.Sprintf(
+		"%s/households/%s/groups",
+		baseURL,
+		config.Get().SonosHouseholdId,
+	)
 	res, err := s.sonosAPIRequest(url, "GET", nil)
 	if err != nil || res.StatusCode != 200 {
 		log.Printf("Failed to make request to Sonos Groups API, %v, %v", res.StatusCode, err)
@@ -77,10 +130,12 @@ func (s Sonos) GetGroupIdByRoomName(room string) (string, error) {
 	return "", nil // need to return not found error
 }
 
-func (s Sonos) VolumeForGroup(value int, groupName string) {
-	log.Print("Volume change triggered for ", groupName)
-	groupId, _ := s.GetGroupIdByRoomName(groupName)
-	url := fmt.Sprintf("%s/groups/%s/groupVolume", baseURL, groupId)
+func (s *Sonos) VolumeForGroup(value int) {
+	url := fmt.Sprintf(
+		"%s/groups/%s/groupVolume",
+		baseURL,
+		groupForRoom[s.State.Room],
+	)
 
 	payload := strings.NewReader(fmt.Sprintf("{\"volume\":%d}", value))
 
@@ -100,18 +155,35 @@ func (s Sonos) VolumeForGroup(value int, groupName string) {
 		log.Printf("Body to String: %s", string(body))
 		return
 	} else {
-		log.Printf("Volume successfully changed to %d for %s", value, groupName)
+		log.Printf("Volume successfully changed to %d for %s", value, s.State.Room)
 	}
 
 	defer res.Body.Close()
 }
 
-func (s Sonos) PlayPause(groupName string) {
-	log.Print("Play / Pause triggered for ", groupName)
-	// TODO: toggle can go out of sync, rather do play / pause
+func (s *Sonos) Play() {
+	log.Print("Start playing music in room ", s.State.Room)
+	url := fmt.Sprintf(
+		"%s/groups/%v/playback/play",
+		baseURL,
+		groupForRoom[s.State.Room],
+	)
 
-	groupId, _ := s.GetGroupIdByRoomName(groupName)
-	url := fmt.Sprintf("%s/groups/%s/playback/togglePlayPause", baseURL, groupId)
+	_, err := s.sonosAPIRequest(url, "POST", nil)
+
+	if err != nil {
+		log.Printf("Failed to make request to Sonos API, %v", err)
+		return
+	}
+}
+
+func (s *Sonos) Pause() {
+	log.Print("Pause music in room ", s.State.Room)
+	url := fmt.Sprintf(
+		"%s/groups/%s/playback/pause",
+		baseURL,
+		groupForRoom[s.State.Room],
+	)
 
 	_, err := s.sonosAPIRequest(url, "POST", nil)
 
