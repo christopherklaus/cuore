@@ -35,13 +35,13 @@ func (s *Sonos) playerOrGroup() string {
 }
 
 func (s *Sonos) UpdateState(state common.Page) {
-	s.SetRoom(state.Room) // need to wait for room being set
+	s.setRoom(state.Room) // need to wait for room being set
 
-	s.SetValue(state.CurrentValue)
-	s.SetIsPlaying(state.State)
+	s.setValue(state.CurrentValue)
+	s.setIsPlaying(state.State)
 }
 
-func (s *Sonos) SetIsPlaying(isPlaying bool) {
+func (s *Sonos) setIsPlaying(isPlaying bool) {
 	if s.State.Playing == isPlaying {
 		return
 	}
@@ -49,24 +49,24 @@ func (s *Sonos) SetIsPlaying(isPlaying bool) {
 	s.State.Playing = isPlaying
 
 	if isPlaying {
-		s.Play()
+		s.play()
 	}
 
 	if !isPlaying {
-		s.Pause()
+		s.pause()
 	}
 }
 
-func (s *Sonos) SetValue(value int) {
+func (s *Sonos) setValue(value int) {
 	if s.State.Value == value {
 		return
 	}
 
-	s.VolumeForGroup(value)
+	s.volumeForGroup(value)
 	s.State.Value = value
 }
 
-func (s *Sonos) SetRoom(room string) {
+func (s *Sonos) setRoom(room string) {
 	roomMutex.Lock()
 	defer roomMutex.Unlock()
 
@@ -74,7 +74,7 @@ func (s *Sonos) SetRoom(room string) {
 
 	// There should be an option to decide whether we should go by players or by groups
 	if _, ok := players[room]; !ok {
-		err := s.UpdateGroupsAndPlayers()
+		err := s.updateGroupsAndPlayers()
 		if err != nil {
 			log.Print("Failed to update groups and players")
 		}
@@ -105,7 +105,7 @@ func (s *Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*
 	return http.DefaultClient.Do(req)
 }
 
-func (s *Sonos) UpdateGroupsAndPlayers() error {
+func (s *Sonos) updateGroupsAndPlayers() error {
 	url := fmt.Sprintf(
 		"%s/households/%s/groups",
 		baseURL,
@@ -141,7 +141,7 @@ func (s *Sonos) UpdateGroupsAndPlayers() error {
 	return nil
 }
 
-func (s *Sonos) VolumeForGroup(value int) {
+func (s *Sonos) volumeForGroup(value int) {
 	url := fmt.Sprintf(
 		"%s/%ss/%s/%sVolume",
 		baseURL,
@@ -186,7 +186,7 @@ func groupForPlayer(player string) string {
 	return ""
 }
 
-func (s *Sonos) Play() {
+func (s *Sonos) play() {
 	log.Print("Start playing music in room ", s.State.Room)
 	url := fmt.Sprintf(
 		"%s/groups/%v/playback/play",
@@ -202,7 +202,7 @@ func (s *Sonos) Play() {
 	}
 }
 
-func (s *Sonos) Pause() {
+func (s *Sonos) pause() {
 	log.Print("Pause music in room ", s.State.Room)
 	url := fmt.Sprintf(
 		"%s/groups/%s/playback/pause",
