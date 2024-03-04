@@ -19,7 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var Sonos *sonos.Sonos = &sonos.Sonos{}
+var Sonos *sonos.Sonos = &sonos.Sonos{ControlPlayers: true}
 var Hue *hue.Hue = &hue.Hue{}
 
 func init() {

@@ -1,7 +1,8 @@
 package sonos
 
 type Sonos struct {
-	State State
+	State          State
+	ControlPlayers bool
 }
 
 type State struct {

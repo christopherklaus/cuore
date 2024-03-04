@@ -16,13 +16,22 @@ import (
 
 var (
 	baseURL      = "https://api.ws.sonos.com/control/api/v1"
-	groupForRoom = map[string]string{}
+	groups       = map[string]string{}
+	players      = map[string]string{}
+	groupPlayers = map[string][]string{}
 	roomMutex    sync.Mutex
 )
 
 func authenticationToken() string {
 	token, _ := getToken()
 	return fmt.Sprintf("Bearer %s", token.AccessToken)
+}
+
+func (s *Sonos) playerOrGroup() string {
+	if s.ControlPlayers {
+		return "player"
+	}
+	return "group"
 }
 
 func (s *Sonos) UpdateState(state common.Page) {
@@ -49,7 +58,6 @@ func (s *Sonos) SetIsPlaying(isPlaying bool) {
 }
 
 func (s *Sonos) SetValue(value int) {
-	log.Print("Room is ", s.State.Room)
 	if s.State.Value == value {
 		return
 	}
@@ -64,9 +72,12 @@ func (s *Sonos) SetRoom(room string) {
 
 	s.State.Room = room
 
-	if _, ok := groupForRoom[room]; !ok {
-		groupId, _ := s.GetGroupIdByRoomName(room)
-		groupForRoom[room] = groupId
+	// There should be an option to decide whether we should go by players or by groups
+	if _, ok := players[room]; !ok {
+		err := s.UpdateGroupsAndPlayers()
+		if err != nil {
+			log.Print("Failed to update groups and players")
+		}
 	}
 }
 
@@ -94,20 +105,18 @@ func (s *Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*
 	return http.DefaultClient.Do(req)
 }
 
-func (s *Sonos) GetGroupIdByRoomName(room string) (string, error) {
-	log.Printf("Getting household id %s", config.Get().SonosHouseholdId)
+func (s *Sonos) UpdateGroupsAndPlayers() error {
 	url := fmt.Sprintf(
 		"%s/households/%s/groups",
 		baseURL,
 		config.Get().SonosHouseholdId,
 	)
 	res, err := s.sonosAPIRequest(url, "GET", nil)
+
 	if err != nil || res.StatusCode != 200 {
 		log.Printf("Failed to make request to Sonos Groups API, %v, %v", res.StatusCode, err)
-		return "", err
+		return err
 	}
-
-	log.Printf("Successfully retrieved groups for room %s", room)
 
 	defer res.Body.Close()
 
@@ -117,24 +126,28 @@ func (s *Sonos) GetGroupIdByRoomName(room string) (string, error) {
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		log.Print("Error decoding JSON: ", err)
-		return "", err
+		return err
 	}
 
 	for _, group := range response.Groups {
-		log.Printf("Group %v", group)
-		if group.Name == room {
-			return group.Id, nil
-		}
+		groups[group.Name] = group.Id
+		groupPlayers[group.Id] = group.PlayerIds
 	}
 
-	return "", nil // need to return not found error
+	for _, player := range response.Players {
+		players[player.Name] = player.Id
+	}
+
+	return nil
 }
 
 func (s *Sonos) VolumeForGroup(value int) {
 	url := fmt.Sprintf(
-		"%s/groups/%s/groupVolume",
+		"%s/%ss/%s/%sVolume",
 		baseURL,
-		groupForRoom[s.State.Room],
+		s.playerOrGroup(),
+		players[s.State.Room],
+		s.playerOrGroup(),
 	)
 
 	payload := strings.NewReader(fmt.Sprintf("{\"volume\":%d}", value))
@@ -161,12 +174,24 @@ func (s *Sonos) VolumeForGroup(value int) {
 	defer res.Body.Close()
 }
 
+func groupForPlayer(player string) string {
+	for group, players := range groupPlayers {
+		for _, p := range players {
+			if p == player {
+				return group
+			}
+		}
+	}
+
+	return ""
+}
+
 func (s *Sonos) Play() {
 	log.Print("Start playing music in room ", s.State.Room)
 	url := fmt.Sprintf(
 		"%s/groups/%v/playback/play",
 		baseURL,
-		groupForRoom[s.State.Room],
+		groupForPlayer(players[s.State.Room]),
 	)
 
 	_, err := s.sonosAPIRequest(url, "POST", nil)
@@ -182,7 +207,7 @@ func (s *Sonos) Pause() {
 	url := fmt.Sprintf(
 		"%s/groups/%s/playback/pause",
 		baseURL,
-		groupForRoom[s.State.Room],
+		groupForPlayer(players[s.State.Room]),
 	)
 
 	_, err := s.sonosAPIRequest(url, "POST", nil)
