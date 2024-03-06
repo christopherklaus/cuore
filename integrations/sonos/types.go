@@ -1,15 +1,19 @@
 package sonos
 
 type Sonos struct {
-	State          State
+	Rooms          []Room
 	ControlPlayers bool
 }
 
+type Room struct {
+	Name      string
+	State     State
+	PlayerIds []string
+}
+
 type State struct {
-	Name    string `json:"name"`
-	Value   int    `json:"value"`
-	Playing bool   `json:"isPlaying"`
-	Room    string `json:"room"`
+	Value   int  `json:"value"`
+	Playing bool `json:"isPlaying"`
 }
 
 type GroupsResponse struct {

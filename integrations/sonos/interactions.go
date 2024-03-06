@@ -35,50 +35,62 @@ func (s *Sonos) playerOrGroup() string {
 }
 
 func (s *Sonos) UpdateState(state common.Page) {
-	s.setRoom(state.Room) // need to wait for room being set
-
-	s.setValue(state.CurrentValue)
-	s.setIsPlaying(state.State)
-}
-
-func (s *Sonos) setIsPlaying(isPlaying bool) {
-	if s.State.Playing == isPlaying {
-		return
-	}
-
-	s.State.Playing = isPlaying
-
-	if isPlaying {
-		s.play()
-	}
-
-	if !isPlaying {
-		s.pause()
-	}
-}
-
-func (s *Sonos) setValue(value int) {
-	if s.State.Value == value {
-		return
-	}
-
-	s.volumeForGroup(value)
-	s.State.Value = value
-}
-
-func (s *Sonos) setRoom(room string) {
 	roomMutex.Lock()
 	defer roomMutex.Unlock()
 
-	s.State.Room = room
+	var room *Room
+	if room = s.findRoom(state.Room); room == nil {
+		// room does not exist yet, creating new room
+		room = &Room{
+			Name:  state.Room,
+			State: State{},
+		}
+		s.Rooms = append(s.Rooms, *room)
 
-	// There should be an option to decide whether we should go by players or by groups
-	if _, ok := players[room]; !ok {
-		err := s.updateGroupsAndPlayers()
-		if err != nil {
-			log.Print("Failed to update groups and players")
+		if _, ok := players[state.Room]; !ok {
+			err := s.updateGroupsAndPlayers()
+			if err != nil {
+				log.Print("Failed to update groups and players")
+			}
 		}
 	}
+
+	s.setIsPlaying(state.State, room)
+	s.setValue(state.CurrentValue, room)
+}
+
+func (s *Sonos) setIsPlaying(isPlaying bool, room *Room) {
+	if room.State.Playing == isPlaying {
+		return
+	}
+
+	room.State.Playing = isPlaying
+
+	if isPlaying {
+		s.play(*room)
+	}
+
+	if !isPlaying {
+		s.pause(*room)
+	}
+}
+
+func (s *Sonos) setValue(value int, room *Room) {
+	if room.State.Value == value {
+		return
+	}
+
+	s.volumeForPlayer(value, *room)
+	room.State.Value = value
+}
+
+func (s *Sonos) findRoom(roomName string) *Room {
+	for _, room := range s.Rooms {
+		if room.Name == roomName {
+			return &room
+		}
+	}
+	return nil
 }
 
 func (s *Sonos) sonosAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
@@ -141,12 +153,12 @@ func (s *Sonos) updateGroupsAndPlayers() error {
 	return nil
 }
 
-func (s *Sonos) volumeForGroup(value int) {
+func (s *Sonos) volumeForPlayer(value int, room Room) {
 	url := fmt.Sprintf(
 		"%s/%ss/%s/%sVolume",
 		baseURL,
 		s.playerOrGroup(),
-		players[s.State.Room],
+		players[room.Name],
 		s.playerOrGroup(),
 	)
 
@@ -168,7 +180,7 @@ func (s *Sonos) volumeForGroup(value int) {
 		log.Printf("Body to String: %s", string(body))
 		return
 	} else {
-		log.Printf("Volume successfully changed to %d for %s", value, s.State.Room)
+		log.Printf("Volume successfully changed to %d for %s", value, room.Name)
 	}
 
 	defer res.Body.Close()
@@ -186,12 +198,12 @@ func groupForPlayer(player string) string {
 	return ""
 }
 
-func (s *Sonos) play() {
-	log.Print("Start playing music in room ", s.State.Room)
+func (s *Sonos) play(room Room) {
+	log.Print("Start playing music in room ", room.Name)
 	url := fmt.Sprintf(
 		"%s/groups/%v/playback/play",
 		baseURL,
-		groupForPlayer(players[s.State.Room]),
+		groupForPlayer(players[room.Name]),
 	)
 
 	_, err := s.sonosAPIRequest(url, "POST", nil)
@@ -202,12 +214,12 @@ func (s *Sonos) play() {
 	}
 }
 
-func (s *Sonos) pause() {
-	log.Print("Pause music in room ", s.State.Room)
+func (s *Sonos) pause(room Room) {
+	log.Print("Pause music in room ", room.Name)
 	url := fmt.Sprintf(
 		"%s/groups/%s/playback/pause",
 		baseURL,
-		groupForPlayer(players[s.State.Room]),
+		groupForPlayer(players[room.Name]),
 	)
 
 	_, err := s.sonosAPIRequest(url, "POST", nil)
