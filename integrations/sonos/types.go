@@ -7,7 +7,7 @@ type Sonos struct {
 
 type Room struct {
 	Name      string
-	State     State
+	State     *State
 	PlayerIds []string
 }
 

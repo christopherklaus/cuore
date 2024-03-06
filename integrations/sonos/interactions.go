@@ -43,7 +43,7 @@ func (s *Sonos) UpdateState(state common.Page) {
 		// room does not exist yet, creating new room
 		room = &Room{
 			Name:  state.Room,
-			State: State{},
+			State: &State{},
 		}
 		s.Rooms = append(s.Rooms, *room)
 
@@ -60,10 +60,6 @@ func (s *Sonos) UpdateState(state common.Page) {
 }
 
 func (s *Sonos) setIsPlaying(isPlaying bool, room *Room) {
-	if room.State.Playing == isPlaying {
-		return
-	}
-
 	room.State.Playing = isPlaying
 
 	if isPlaying {
