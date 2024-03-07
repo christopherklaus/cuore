@@ -41,7 +41,8 @@ func (h *Hue) updateGroups() {
 
 func (h *Hue) UpdateState(state common.Page) {
 	h.updateGroups() // should happen on some cycle
-	setGroupState(state.Room, state.Status)
+	setGroupBrightness(state.Room, state.CurrentValue)
+	setGroupStatus(state.Room, state.Status)
 }
 
 func hueAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
@@ -60,14 +61,23 @@ func (h *Hue) Autodiscover() {}
 // TODO: All the discovery stuff
 // TODO: Authorisation
 
-func setGroupState(room string, state bool) {
+func setGroupStatus(room string, state bool) {
 	url := fmt.Sprintf("groups/%s/action", groups[room])
 	payload := strings.NewReader(fmt.Sprintf("{\"on\": %t}", state))
 
 	res, _ := hueAPIRequest(url, "PUT", payload)
-	b, _ := io.ReadAll(res.Body)
 
-	fmt.Println(string(b))
+	defer res.Body.Close()
+}
+
+func setGroupBrightness(room string, value int) {
+	url := fmt.Sprintf("groups/%s/action", groups[room])
+	hueValue := int((float64(value) / 100) * 254)
+	log.Print("value: ", value, " hueValue: ", hueValue, " room: ", room, " group: ", groups[room])
+	payload := strings.NewReader(fmt.Sprintf("{\"bri\": %v}", hueValue))
+	log.Print(payload)
+
+	res, _ := hueAPIRequest(url, "PUT", payload)
 
 	defer res.Body.Close()
 }
