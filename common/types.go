@@ -3,6 +3,6 @@ package common
 type Page struct {
 	Name         string `json:"name"`
 	CurrentValue int    `json:"currentValue"`
-	State        bool   `json:"state"`
+	Status       bool   `json:"status"`
 	Room         string `json:"room"`
 }

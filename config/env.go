@@ -15,6 +15,7 @@ type Config struct {
 	SonosHouseholdId   string
 	HueAuthToken       string
 	EncryptionFilePath string
+	HueBridgeIP        string
 }
 
 var config Config
@@ -34,6 +35,7 @@ func LoadEnvs() {
 		SonosHouseholdId:   getEnvVarOrDefault("SONOS_HOUSEHOLD_ID", ""),
 		HueAuthToken:       getEnvVarOrDefault("HUE_AUTH_TOKEN", ""),
 		EncryptionFilePath: getEnvVarOrDefault("ENCRYPTION_FILE_PATH", "tokens"),
+		HueBridgeIP:        getEnvVarOrDefault("HUE_BRIDGE_IP", "192.168.178.34"),
 	}
 }
 

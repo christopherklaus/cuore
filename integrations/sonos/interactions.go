@@ -55,7 +55,7 @@ func (s *Sonos) UpdateState(state common.Page) {
 		}
 	}
 
-	s.setIsPlaying(state.State, room)
+	s.setIsPlaying(state.Status, room)
 	s.setValue(state.CurrentValue, room)
 }
 

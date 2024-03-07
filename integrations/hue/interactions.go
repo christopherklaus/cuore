@@ -1,54 +1,70 @@
 package hue
 
 import (
+	"cuore/common"
 	"cuore/config"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
 
-type Hue struct {
-	State State
-}
-
-type State struct {
-	Name    string `json:"name"`
-	Value   int    `json:"value"`
-	Playing bool   `json:"isPlaying"`
-}
-
 var (
-	authToken = config.Get().HueAuthToken
+	groups = map[string]string{} // room -> groupId
 )
 
-// kitchen := []int{22, 23, 25}
-// bedroom := []int{6, 4}
-// living_room = []int{2, 3}
-var space = []int{7, 19}
+// func (h *Hue) Switch(state bool) {
+// 	for _, light := range space {
+// 		h.setLightState(state, light)
+// 	}
+// }
 
-func (h Hue) Switch(state bool) {
-	for _, light := range space {
-		h.setLightState(state, light)
+func (h *Hue) updateGroups() {
+	res, _ := hueAPIRequest("groups", "GET", nil)
+	body, _ := io.ReadAll(res.Body)
+
+	var groupsResponse map[string]GroupResponse
+
+	if err := json.Unmarshal(body, &groupsResponse); err != nil {
+		log.Print("Error decoding JSON: ", err)
+		return
 	}
+
+	for id, group := range groupsResponse {
+		groups[group.Name] = id
+	}
+
+	defer res.Body.Close()
 }
 
-func (h Hue) Setup()        {}
-func (h Hue) Autodiscover() {}
+func (h *Hue) UpdateState(state common.Page) {
+	h.updateGroups() // should happen on some cycle
+	setGroupState(state.Room, state.Status)
+}
+
+func hueAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
+	fullUrl := fmt.Sprintf("http://%s/api/%s/%s", config.Get().HueBridgeIP, config.Get().HueAuthToken, url)
+	req, _ := http.NewRequest(method, fullUrl, payload)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	req.Header.Add("Authorization", config.Get().HueAuthToken)
+
+	return http.DefaultClient.Do(req)
+}
+
+func (h *Hue) Setup()        {}
+func (h *Hue) Autodiscover() {}
 
 // TODO: All the discovery stuff
 // TODO: Authorisation
 
-func (h Hue) setLightState(state bool, lightId int) {
-	url := fmt.Sprintf("http://192.168.178.34/api/%s/lights/%d/state", authToken, lightId)
+func setGroupState(room string, state bool) {
+	url := fmt.Sprintf("groups/%s/action", groups[room])
 	payload := strings.NewReader(fmt.Sprintf("{\"on\": %t}", state))
-	req, _ := http.NewRequest("PUT", url, payload)
 
-	req.Header.Add("accept", "application/json")
-	req.Header.Add("content-type", "application/json")
-	req.Header.Add("Authorization", authToken)
-
-	res, _ := http.DefaultClient.Do(req)
+	res, _ := hueAPIRequest(url, "PUT", payload)
 	b, _ := io.ReadAll(res.Body)
 
 	fmt.Println(string(b))
@@ -56,20 +72,20 @@ func (h Hue) setLightState(state bool, lightId int) {
 	defer res.Body.Close()
 }
 
-func (h Hue) Play(room string) {
-	for _, light := range space {
-		h.setLightState(true, light)
-	}
-}
+// func (h *Hue) Play(room string) {
+// 	for _, light := range space {
+// 		h.setLightState(true, light)
+// 	}
+// }
 
-func (h Hue) Pause(room string) {
-	for _, light := range space {
-		h.setLightState(false, light)
-	}
-}
+// func (h *Hue) Pause(room string) {
+// 	for _, light := range space {
+// 		h.setLightState(false, light)
+// 	}
+// }
 
-func (h Hue) LongPress(room string) {
-	for _, light := range space {
-		h.setLightState(false, light)
-	}
-}
+// func (h *Hue) LongPress(room string) {
+// 	for _, light := range space {
+// 		h.setLightState(false, light)
+// 	}
+// }

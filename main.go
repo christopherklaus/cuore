@@ -74,7 +74,7 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 		Sonos.UpdateState(messageData)
 		return
 	case "Lights":
-		Hue.Switch(messageData.State)
+		Hue.UpdateState(messageData)
 		return
 	default:
 		log.Printf("Unknown device: %s", messageData.Name)
