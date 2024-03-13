@@ -48,7 +48,9 @@ func apiRouter(wg *sync.WaitGroup, shutdownChan <-chan struct{}) {
 	})
 
 	var sonosRoutes *gin.RouterGroup = r.Group("/integrations/sonos")
+	var hueRoutes *gin.RouterGroup = r.Group("/integrations/hue")
 	Sonos.AuthorizationHandlers(sonosRoutes)
+	Hue.AuthorizationHandlers(hueRoutes)
 
 	err := http.ListenAndServe(fmt.Sprintf(":%d", 80), r)
 	if err != nil {

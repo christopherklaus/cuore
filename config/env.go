@@ -16,6 +16,8 @@ type Config struct {
 	HueAuthToken       string
 	EncryptionFilePath string
 	HueBridgeIP        string
+	HueClientId        string
+	HueClientSecret    string
 }
 
 var config Config
@@ -32,6 +34,8 @@ func LoadEnvs() {
 		EncryptionKey:      getEnvVarOrDefault("ENCRYPTION_KEY", "example key 1234"),
 		SonosClientId:      getEnvVarOrDefault("SONOS_CLIENT_ID", ""),
 		SonosClientSecret:  getEnvVarOrDefault("SONOS_CLIENT_SECRET", ""),
+		HueClientId:        getEnvVarOrDefault("HUE_CLIENT_ID", ""),
+		HueClientSecret:    getEnvVarOrDefault("HUE_CLIENT_SECRET", ""),
 		SonosHouseholdId:   getEnvVarOrDefault("SONOS_HOUSEHOLD_ID", ""),
 		HueAuthToken:       getEnvVarOrDefault("HUE_AUTH_TOKEN", ""),
 		EncryptionFilePath: getEnvVarOrDefault("ENCRYPTION_FILE_PATH", "tokens"),

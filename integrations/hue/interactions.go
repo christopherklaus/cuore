@@ -15,12 +15,6 @@ var (
 	groups = map[string]string{} // room -> groupId
 )
 
-// func (h *Hue) Switch(state bool) {
-// 	for _, light := range space {
-// 		h.setLightState(state, light)
-// 	}
-// }
-
 func (h *Hue) updateGroups() {
 	res, _ := hueAPIRequest("groups", "GET", nil)
 	body, _ := io.ReadAll(res.Body)
@@ -46,13 +40,19 @@ func (h *Hue) UpdateState(state common.Page) {
 }
 
 func hueAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
-	fullUrl := fmt.Sprintf("http://%s/api/%s/%s", config.Get().HueBridgeIP, config.Get().HueAuthToken, url)
+	fullUrl := fmt.Sprintf("http://%s/api/%s/%s", config.Get().HueBridgeIP, authenticationToken(), url)
 	req, _ := http.NewRequest(method, fullUrl, payload)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
-	req.Header.Add("Authorization", config.Get().HueAuthToken)
+	req.Header.Add("Authorization", authenticationToken())
 
 	return http.DefaultClient.Do(req)
+}
+
+func authenticationToken() string {
+	// token, _ := getToken()
+	// log.Print("Hue Token: ", token.AccessToken)
+	return config.Get().HueAuthToken
 }
 
 func (h *Hue) Setup()        {}
@@ -73,29 +73,9 @@ func setGroupStatus(room string, state bool) {
 func setGroupBrightness(room string, value int) {
 	url := fmt.Sprintf("groups/%s/action", groups[room])
 	hueValue := int((float64(value) / 100) * 254)
-	log.Print("value: ", value, " hueValue: ", hueValue, " room: ", room, " group: ", groups[room])
 	payload := strings.NewReader(fmt.Sprintf("{\"bri\": %v}", hueValue))
-	log.Print(payload)
 
 	res, _ := hueAPIRequest(url, "PUT", payload)
 
 	defer res.Body.Close()
 }
-
-// func (h *Hue) Play(room string) {
-// 	for _, light := range space {
-// 		h.setLightState(true, light)
-// 	}
-// }
-
-// func (h *Hue) Pause(room string) {
-// 	for _, light := range space {
-// 		h.setLightState(false, light)
-// 	}
-// }
-
-// func (h *Hue) LongPress(room string) {
-// 	for _, light := range space {
-// 		h.setLightState(false, light)
-// 	}
-// }
