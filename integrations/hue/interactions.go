@@ -15,33 +15,69 @@ var (
 	groups = map[string]string{} // room -> groupId
 )
 
-func (h *Hue) updateGroups() {
-	res, _ := hueAPIRequest("groups", "GET", nil)
-	body, _ := io.ReadAll(res.Body)
+func (h *Hue) HandleControl(msg common.ControlMessage) error {
+	if err := h.updateGroups(); err != nil {
+		return fmt.Errorf("failed to update groups: %w", err)
+	}
+
+	switch msg.Action {
+	case "on":
+		return h.setGroupStatus(msg.Room, true)
+	case "off":
+		return h.setGroupStatus(msg.Room, false)
+	case "brightness":
+		if msg.Value == nil {
+			return fmt.Errorf("brightness action requires a value")
+		}
+		return h.setGroupBrightness(msg.Room, *msg.Value)
+	default:
+		return fmt.Errorf("unknown action: %s", msg.Action)
+	}
+}
+
+func (h *Hue) HandleSetup(msg common.SetupMessage) error {
+	switch msg.Command {
+	case "discover":
+		return h.Autodiscover()
+	case "authorize":
+		// TODO: Implement authorization
+		return fmt.Errorf("authorization not implemented")
+	default:
+		return fmt.Errorf("unknown setup command: %s", msg.Command)
+	}
+}
+
+func (h *Hue) updateGroups() error {
+	res, err := hueAPIRequest("groups", "GET", nil)
+	if err != nil {
+		return fmt.Errorf("failed to make request to Hue API: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	var groupsResponse map[string]GroupResponse
-
 	if err := json.Unmarshal(body, &groupsResponse); err != nil {
-		log.Print("Error decoding JSON: ", err)
-		return
+		return fmt.Errorf("error decoding JSON: %w", err)
 	}
 
 	for id, group := range groupsResponse {
 		groups[group.Name] = id
 	}
 
-	defer res.Body.Close()
-}
-
-func (h *Hue) UpdateState(state common.Page) {
-	h.updateGroups() // should happen on some cycle
-	setGroupBrightness(state.Room, state.CurrentValue)
-	setGroupStatus(state.Room, state.Status)
+	return nil
 }
 
 func hueAPIRequest(url string, method string, payload io.Reader) (*http.Response, error) {
 	fullUrl := fmt.Sprintf("http://%s/api/%s/%s", config.Get().HueBridgeIP, authenticationToken(), url)
-	req, _ := http.NewRequest(method, fullUrl, payload)
+	req, err := http.NewRequest(method, fullUrl, payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("Authorization", authenticationToken())
@@ -55,27 +91,55 @@ func authenticationToken() string {
 	return config.Get().HueAuthToken
 }
 
-func (h *Hue) Setup()        {}
-func (h *Hue) Autodiscover() {}
-
-// TODO: All the discovery stuff
-// TODO: Authorisation
-
-func setGroupStatus(room string, state bool) {
-	url := fmt.Sprintf("groups/%s/action", groups[room])
-	payload := strings.NewReader(fmt.Sprintf("{\"on\": %t}", state))
-
-	res, _ := hueAPIRequest(url, "PUT", payload)
-
-	defer res.Body.Close()
+func (h *Hue) Autodiscover() error {
+	// TODO: Implement autodiscovery
+	log.Print("Autodiscovery not implemented")
+	return nil
 }
 
-func setGroupBrightness(room string, value int) {
-	url := fmt.Sprintf("groups/%s/action", groups[room])
+func (h *Hue) setGroupStatus(room string, state bool) error {
+	groupId, ok := groups[room]
+	if !ok {
+		return fmt.Errorf("room %s not found", room)
+	}
+
+	url := fmt.Sprintf("groups/%s/action", groupId)
+	payload := strings.NewReader(fmt.Sprintf("{\"on\": %t}", state))
+
+	res, err := hueAPIRequest(url, "PUT", payload)
+	if err != nil {
+		return fmt.Errorf("failed to make request to Hue API: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		body, _ := io.ReadAll(res.Body)
+		return fmt.Errorf("failed to set group status: %s", string(body))
+	}
+
+	return nil
+}
+
+func (h *Hue) setGroupBrightness(room string, value int) error {
+	groupId, ok := groups[room]
+	if !ok {
+		return fmt.Errorf("room %s not found", room)
+	}
+
+	url := fmt.Sprintf("groups/%s/action", groupId)
 	hueValue := int((float64(value) / 100) * 254)
 	payload := strings.NewReader(fmt.Sprintf("{\"bri\": %v}", hueValue))
 
-	res, _ := hueAPIRequest(url, "PUT", payload)
-
+	res, err := hueAPIRequest(url, "PUT", payload)
+	if err != nil {
+		return fmt.Errorf("failed to make request to Hue API: %w", err)
+	}
 	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		body, _ := io.ReadAll(res.Body)
+		return fmt.Errorf("failed to set group brightness: %s", string(body))
+	}
+
+	return nil
 }

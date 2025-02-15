@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"cuore/common"
 	"cuore/config"
 	"cuore/integrations/hue"
@@ -11,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -61,26 +59,56 @@ func apiRouter(wg *sync.WaitGroup, shutdownChan <-chan struct{}) {
 	log.Print("Shutting down API router")
 }
 
-func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
-	var messageData common.Page
-
-	log.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
-
-	if err := json.Unmarshal(msg.Payload(), &messageData); err != nil {
-		log.Fatalf("Error decoding JSON: %v", err)
-		return
-	}
-
-	switch messageData.Name {
-	case "Music":
-		Sonos.UpdateState(messageData)
-		return
-	case "Lights":
-		Hue.UpdateState(messageData)
-		return
+func handleControlMessage(msg common.ControlMessage) {
+	var err error
+	switch msg.Target {
+	case "music":
+		err = Sonos.HandleControl(msg)
+	case "light":
+		err = Hue.HandleControl(msg)
 	default:
-		log.Printf("Unknown device: %s", messageData.Name)
+		log.Printf("Unknown target type: %s", msg.Target)
+		return
 	}
+
+	if err != nil {
+		log.Printf("Error handling control message: %v", err)
+	}
+}
+
+func handleSetupMessage(msg common.SetupMessage) {
+	var err error
+	switch msg.Target {
+	case "music":
+		err = Sonos.HandleSetup(msg)
+	case "light":
+		err = Hue.HandleSetup(msg)
+	default:
+		log.Printf("Unknown target type: %s", msg.Target)
+		return
+	}
+
+	if err != nil {
+		log.Printf("Error handling setup message: %v", err)
+	}
+}
+
+func controlMessageHandler(client mqtt.Client, msg mqtt.Message) {
+	var controlMsg common.ControlMessage
+	if err := json.Unmarshal(msg.Payload(), &controlMsg); err != nil {
+		log.Printf("Error decoding control message: %v", err)
+		return
+	}
+	handleControlMessage(controlMsg)
+}
+
+func setupMessageHandler(client mqtt.Client, msg mqtt.Message) {
+	var setupMsg common.SetupMessage
+	if err := json.Unmarshal(msg.Payload(), &setupMsg); err != nil {
+		log.Printf("Error decoding setup message: %v", err)
+		return
+	}
+	handleSetupMessage(setupMsg)
 }
 
 func mqttBroker(wg *sync.WaitGroup, shutdownChan <-chan struct{}) {
@@ -101,35 +129,23 @@ func mqttBroker(wg *sync.WaitGroup, shutdownChan <-chan struct{}) {
 		}
 	}
 
-	if token := c.Subscribe("status/button", 0, messagePubHandler); token.Wait() && token.Error() != nil {
+	if token := c.Subscribe("control", 0, controlMessageHandler); token.Wait() && token.Error() != nil {
 		log.Print(token.Error())
 		os.Exit(1)
 	}
-
-	for {
-		var message string
-		// reading new message from console
-		fmt.Print("Message to sent, format {}: ")
-		reader := bufio.NewReader(os.Stdin)
-		message, err := reader.ReadString('\n')
-		if err != nil {
-			log.Print(err)
-		}
-		if strings.Compare(message, "\n") > 0 {
-			// if there is a message, publish it.
-			token := c.Publish("status/server", 0, false, message)
-			if strings.Compare(message, "bye\n") == 0 {
-				// if message "bye" then exit the shell.
-				break
-			}
-			token.Wait()
-		}
+	if token := c.Subscribe("setup", 0, setupMessageHandler); token.Wait() && token.Error() != nil {
+		log.Print(token.Error())
+		os.Exit(1)
 	}
 
 	<-shutdownChan
 
 	log.Print("Shutting down MQTT broker")
-	if token := c.Unsubscribe("status/button"); token.Wait() && token.Error() != nil {
+	if token := c.Unsubscribe("control"); token.Wait() && token.Error() != nil {
+		log.Print(token.Error())
+		os.Exit(1)
+	}
+	if token := c.Unsubscribe("setup"); token.Wait() && token.Error() != nil {
 		log.Print(token.Error())
 		os.Exit(1)
 	}

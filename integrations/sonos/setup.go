@@ -10,7 +10,7 @@ import (
 const (
 	authURL      = "https://api.sonos.com/login/v3/oauth"
 	tokenURL     = "https://api.sonos.com/login/v3/oauth/access"
-	redirectURL  = "https://heychr.is/new/home"
+	redirectURL  = "http://localhost/integrations/sonos/auth"
 	providerName = "sonos"
 )
 
